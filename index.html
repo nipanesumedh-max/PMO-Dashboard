@@ -140,58 +140,30 @@
 
 <div class="config-overlay" id="configOverlay" style="display:none;">
   <div class="config-box">
-    <h2>Connect your Google Sheet</h2>
-    <p>Paste the Sheet ID from your Google Sheets URL. The sheet must be published to the web (File → Share → Publish to web). See the README for the exact tab names and column structure.</p>
-    <label>Google Sheet ID</label>
-    <input type="text" id="sheetIdInput" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" />
+    <h2>Dashboard connection</h2>
+    <p>This dashboard reads live from your Google Sheet via Apps Script. No configuration needed — data loads automatically on page open.</p>
+    <label>Apps Script URL (connected)</label>
+    <input type="text" id="sheetIdInput" value="Connected via Apps Script" readonly style="color:#3B6D11;background:#EAF3DE;border-color:#3B6D11;" />
     <div class="config-actions">
-      <button class="btn" onclick="document.getElementById('configOverlay').style.display='none'">Cancel</button>
-      <button class="btn primary" onclick="saveConfig()">Connect</button>
+      <button class="btn primary" onclick="document.getElementById('configOverlay').style.display='none'">Close</button>
     </div>
   </div>
 </div>
 
 <script>
-const SHEET_ID_KEY = 'pmo_sheet_id';
-const TABS = { actions: 'ActionItems', workstreams: 'Workstreams', meetings: 'Meetings', kpis: 'KPIs' };
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzfbARVTcY-VncvkVQjPLVWziH9lFG8o6H85Z2f96JorH0cOTGqiwwJS-hcD3gpDO_a/exec';
 
-function getSheetId() { return localStorage.getItem(SHEET_ID_KEY) || ''; }
 function saveConfig() {
-  const val = document.getElementById('sheetIdInput').value.trim();
-  if (!val) return;
-  localStorage.setItem(SHEET_ID_KEY, val);
   document.getElementById('configOverlay').style.display = 'none';
   loadAll();
 }
 
-function csvUrl(sheetId, tab) {
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
-}
-
-async function fetchCSV(url) {
+async function fetchTab(tab) {
+  const url = `${SCRIPT_URL}?sheet=${encodeURIComponent(tab)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  return parseCSV(text);
-}
-
-function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
-  return lines.slice(1).filter(l => l.trim()).map(line => {
-    const vals = [];
-    let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') { inQ = !inQ; }
-      else if (c === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
-      else { cur += c; }
-    }
-    vals.push(cur.trim());
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g,'').trim(); });
-    return obj;
-  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} on tab "${tab}"`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 function statusChip(s) {
@@ -333,29 +305,15 @@ function calcKPIs(actions, workstreams, meetings) {
 }
 
 async function loadAll() {
-  const sheetId = getSheetId();
   const content = document.getElementById('dashContent');
-
-  if (!sheetId) {
-    content.innerHTML = `<div class="empty" style="padding:4rem 2rem;">
-      <div style="font-size:32px;margin-bottom:12px;">📋</div>
-      <div style="font-size:15px;font-weight:600;margin-bottom:8px;color:#0b0b0b;">Connect your Google Sheet</div>
-      <div style="font-size:13px;color:#898781;margin-bottom:20px;max-width:380px;margin-left:auto;margin-right:auto;">Click Configure in the top right, paste your Sheet ID, and the dashboard will populate automatically.</div>
-      <button class="btn primary" onclick="document.getElementById('configOverlay').style.display='flex'">Connect sheet</button>
-    </div>`;
-    document.getElementById('sheetIdInput').value = sheetId;
-    return;
-  }
-
   content.innerHTML = '<div class="loading">Fetching data from Google Sheets...</div>';
-  document.getElementById('sheetIdInput').value = sheetId;
 
   try {
     const [actions, workstreams, meetings, kpis] = await Promise.all([
-      fetchCSV(csvUrl(sheetId, TABS.actions)),
-      fetchCSV(csvUrl(sheetId, TABS.workstreams)),
-      fetchCSV(csvUrl(sheetId, TABS.meetings)),
-      fetchCSV(csvUrl(sheetId, TABS.kpis)).catch(() => [])
+      fetchTab('ActionItems'),
+      fetchTab('Workstreams'),
+      fetchTab('Meetings'),
+      fetchTab('KPIs').catch(() => [])
     ]);
 
     const kpiData = calcKPIs(actions, workstreams, meetings);
