@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMO Governance Dashboard — KeelWorks</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f3;
+    --surface: #ffffff;
+    --surface2: #f9f9f8;
+    --border: rgba(0,0,0,0.09);
+    --text: #0b0b0b;
+    --text2: #52514e;
+    --text3: #898781;
+    --radius: 10px;
+    --blue: #185FA5; --blue-bg: #E6F1FB;
+    --green: #3B6D11; --green-bg: #EAF3DE;
+    --amber: #854F0B; --amber-bg: #FAEEDA;
+    --red: #A32D2D; --red-bg: #FCEBEB;
+    --gray: #5F5E5A; --gray-bg: #F1EFE8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .logo span { color: var(--blue); }
+  .topbar-meta { font-size: 12px; color: var(--text3); }
+  .last-updated { font-size: 11px; color: var(--text3); background: var(--surface2); border: 0.5px solid var(--border); border-radius: 20px; padding: 3px 10px; }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin: 1.75rem 0 0.75rem; }
+  .section-label:first-child { margin-top: 0; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .kpi { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+  .kpi .label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .kpi .value { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1; }
+  .kpi .sub { font-size: 11px; margin-top: 5px; color: var(--text3); }
+  .kpi .sub.ok { color: var(--green); }
+  .kpi .sub.warn { color: var(--amber); }
+  .kpi .sub.risk { color: var(--red); }
+
+  .ws-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .ws-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+  .ws-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
+  .ws-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .ws-owner { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+  .badge.on-track { background: var(--green-bg); color: var(--green); }
+  .badge.at-risk { background: var(--amber-bg); color: var(--amber); }
+  .badge.blocked { background: var(--red-bg); color: var(--red); }
+  .badge.in-setup { background: var(--gray-bg); color: var(--gray); }
+  .ws-rows { border-top: 0.5px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .ws-row { display: flex; justify-content: space-between; font-size: 11px; gap: 8px; }
+  .ws-row .k { color: var(--text3); flex-shrink: 0; }
+  .ws-row .v { color: var(--text2); font-weight: 500; text-align: right; }
+  .v-done { color: var(--green) !important; }
+  .v-ip { color: var(--blue) !important; }
+  .v-pend { color: var(--amber) !important; }
+  .v-block { color: var(--red) !important; }
+
+  .actions-wrap { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .filter-bar { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 0.5px solid var(--border); background: var(--surface2); flex-wrap: wrap; align-items: center; }
+  .filter-bar span { font-size: 11px; color: var(--text3); margin-right: 4px; }
+  .filter-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .filter-btn:hover { background: var(--bg); }
+  .filter-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .tbl-head { display: grid; grid-template-columns: 2.8fr 1fr 0.9fr 0.8fr 0.7fr; padding: 8px 14px; font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; gap: 8px; border-bottom: 0.5px solid var(--border); }
+  .tbl-row { display: grid; grid-template-columns: 2.8fr 1fr 0.9fr 0.8fr 0.7fr; padding: 9px 14px; gap: 8px; border-bottom: 0.5px solid var(--border); align-items: center; transition: background 0.1s; }
+  .tbl-row:last-child { border-bottom: none; }
+  .tbl-row:hover { background: var(--surface2); }
+  .tbl-row.hidden { display: none; }
+  .tbl-item { font-size: 12px; color: var(--text); font-weight: 500; }
+  .tbl-owner { font-size: 11px; color: var(--text2); }
+  .tbl-ws { font-size: 11px; color: var(--text3); }
+  .tbl-date { font-size: 11px; color: var(--text3); }
+  .chip { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: inline-block; white-space: nowrap; }
+  .chip.open { background: var(--blue-bg); color: var(--blue); }
+  .chip.in-progress { background: var(--amber-bg); color: var(--amber); }
+  .chip.done { background: var(--green-bg); color: var(--green); }
+  .chip.ongoing { background: var(--gray-bg); color: var(--gray); }
+  .chip.blocked { background: var(--red-bg); color: var(--red); }
+
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chart-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+  .chart-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 1rem; }
+  .chart-wrap { position: relative; height: 180px; }
+
+  .empty { padding: 2rem; text-align: center; color: var(--text3); font-size: 13px; }
+  .loading { padding: 3rem; text-align: center; color: var(--text3); font-size: 13px; }
+  .error-banner { background: var(--red-bg); border: 0.5px solid #F09595; border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 12px; color: var(--red); margin-bottom: 1rem; display: none; }
+
+  .config-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .config-box { background: var(--surface); border-radius: 14px; padding: 1.75rem; width: 480px; max-width: 90vw; }
+  .config-box h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .config-box p { font-size: 12px; color: var(--text2); margin-bottom: 1.25rem; line-height: 1.6; }
+  .config-box label { font-size: 12px; font-weight: 500; color: var(--text2); display: block; margin-bottom: 5px; }
+  .config-box input { width: 100%; border: 0.5px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); background: var(--surface2); margin-bottom: 1rem; outline: none; }
+  .config-box input:focus { border-color: var(--blue); }
+  .config-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn { font-size: 13px; padding: 7px 16px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-weight: 500; }
+  .btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn:hover { opacity: 0.85; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  @media (max-width: 768px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .ws-grid { grid-template-columns: 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+    .tbl-head, .tbl-row { grid-template-columns: 2fr 1fr 1fr; }
+    .tbl-head .h-ws, .tbl-row .tbl-ws, .tbl-head .h-date, .tbl-row .tbl-date { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">KeelWorks <span>PMO</span></div>
+    <div class="topbar-meta">Governance and Standards Dashboard</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="last-updated" id="lastUpdated">Loading...</span>
+    <button class="btn" onclick="document.getElementById('configOverlay').style.display='flex'" style="font-size:11px;padding:4px 10px;">⚙ Configure</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="error-banner" id="errorBanner"></div>
+  <div id="dashContent" class="loading">Connecting to Google Sheets...</div>
+</div>
+
+<div class="config-overlay" id="configOverlay" style="display:none;">
+  <div class="config-box">
+    <h2>Dashboard connection</h2>
+    <p>This dashboard reads live from your Google Sheet via Apps Script. No configuration needed — data loads automatically on page open.</p>
+    <label>Apps Script URL (connected)</label>
+    <input type="text" id="sheetIdInput" value="Connected via Apps Script" readonly style="color:#3B6D11;background:#EAF3DE;border-color:#3B6D11;" />
+    <div class="config-actions">
+      <button class="btn primary" onclick="document.getElementById('configOverlay').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3oHczmfvMzQrBlxFNElcPv9sszsncU6QQzns7Y77gxrJdrBt1j8srUVioTvGc1fbJ/exec';
+
+function saveConfig() {
+  document.getElementById('configOverlay').style.display = 'none';
+  loadAll();
+}
+
+async function fetchTab(tab) {
+  const url = `${SCRIPT_URL}?sheet=${encodeURIComponent(tab)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} on tab "${tab}"`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+function statusChip(s) {
+  const map = { 'Open':'open', 'In Progress':'in-progress', 'Done':'done', 'Ongoing':'ongoing', 'Blocked':'blocked', 'Pending':'in-progress' };
+  const cls = map[s] || 'open';
+  return `<span class="chip ${cls}">${s || 'Open'}</span>`;
+}
+
+function badgeClass(s) {
+  const m = { 'On Track':'on-track', 'At Risk':'at-risk', 'Blocked':'blocked', 'In Setup':'in-setup', 'Monitoring':'at-risk' };
+  return m[s] || 'in-setup';
+}
+
+function vClass(s) {
+  const m = { 'Done':'v-done', 'Complete':'v-done', 'In Progress':'v-ip', 'Pending':'v-pend', 'Not Started':'v-pend', 'Blocked':'v-block' };
+  return m[s] || '';
+}
+
+let allActions = [], activeFilter = 'All';
+
+function renderActions(data) {
+  allActions = data;
+  const counts = {};
+  data.forEach(r => { const s = r.Status || 'Open'; counts[s] = (counts[s]||0)+1; });
+  const statuses = ['All', ...Object.keys(counts)];
+  const filterHTML = statuses.map(s =>
+    `<button class="filter-btn ${s===activeFilter?'active':''}" onclick="filterActions('${s}')">${s}${s!=='All'?' ('+( counts[s]||0)+')':''}</button>`
+  ).join('');
+
+  const rows = data.map(r => {
+    const show = activeFilter === 'All' || r.Status === activeFilter ? '' : 'hidden';
+    return `<div class="tbl-row ${show}" data-status="${r.Status||'Open'}">
+      <span class="tbl-item">${r['Action Item']||''}</span>
+      <span class="tbl-owner">${r.Owner||''}</span>
+      <span>${statusChip(r.Status||'Open')}</span>
+      <span class="tbl-ws">${r.Workstream||''}</span>
+      <span class="tbl-date">${r['Meeting Date']||''}</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="actions-wrap">
+    <div class="filter-bar"><span>Filter:</span>${filterHTML}</div>
+    <div class="tbl-head"><span>Action item</span><span>Owner</span><span>Status</span><span class="h-ws">Workstream</span><span class="h-date">Meeting</span></div>
+    ${rows || '<div class="empty">No action items found.</div>'}
+  </div>`;
+}
+
+function filterActions(status) {
+  activeFilter = status;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.textContent.startsWith(status)));
+  document.querySelectorAll('.tbl-row').forEach(r => {
+    const match = status === 'All' || r.dataset.status === status;
+    r.classList.toggle('hidden', !match);
+  });
+}
+
+function renderWorkstreams(data) {
+  return data.map(ws => {
+    const fields = [
+      ['Charter', ws.Charter],
+      ['Roadmap', ws.Roadmap],
+      ['Last update', ws['Last Update']],
+    ].filter(([,v]) => v);
+    return `<div class="ws-card">
+      <div class="ws-top">
+        <div><div class="ws-name">${ws.Workstream||''}</div><div class="ws-owner">${ws.Owner||''}</div></div>
+        <span class="badge ${badgeClass(ws.Status)}">${ws.Status||''}</span>
+      </div>
+      <div class="ws-rows">
+        ${fields.map(([k,v])=>`<div class="ws-row"><span class="k">${k}</span><span class="v ${vClass(v)}">${v}</span></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCharts(actions, meetings) {
+  const statusCounts = {};
+  actions.forEach(r => { const s = r.Status||'Open'; statusCounts[s]=(statusCounts[s]||0)+1; });
+  const labels = Object.keys(statusCounts);
+  const counts = labels.map(l => statusCounts[l]);
+  const colors = { 'Open':'#2a78d6','In Progress':'#eda100','Done':'#008300','Ongoing':'#888780','Blocked':'#e34948','Pending':'#eda100' };
+  const bgColors = labels.map(l => colors[l]||'#888780');
+
+  const mtgLabels = meetings.slice(-6).map(m => m.Date||'');
+  const mtgAttendees = meetings.slice(-6).map(m => parseInt(m.Attendees)||0);
+
+  return `<div class="bottom-grid">
+    <div class="chart-card">
+      <div class="chart-title">Action items by status</div>
+      <div class="legend">${labels.map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${bgColors[i]}"></div>${l} (${counts[i]})</div>`).join('')}</div>
+      <div class="chart-wrap"><canvas id="statusChart" role="img" aria-label="Bar chart of action items by status">${labels.map((l,i)=>l+': '+counts[i]).join(', ')}</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Meeting attendance trend</div>
+      <div class="chart-wrap"><canvas id="attendanceChart" role="img" aria-label="Line chart of meeting attendance over last 6 meetings">${mtgLabels.map((l,i)=>l+': '+mtgAttendees[i]).join(', ')}</canvas></div>
+    </div>
+  </div>`;
+}
+
+function buildChartJS(actions, meetings) {
+  const statusCounts = {};
+  actions.forEach(r => { const s = r.Status||'Open'; statusCounts[s]=(statusCounts[s]||0)+1; });
+  const sLabels = Object.keys(statusCounts);
+  const sCounts = sLabels.map(l => statusCounts[l]);
+  const colorMap = { 'Open':'#2a78d6','In Progress':'#eda100','Done':'#008300','Ongoing':'#888780','Blocked':'#e34948','Pending':'#eda100' };
+
+  new Chart(document.getElementById('statusChart'), {
+    type: 'bar',
+    data: { labels: sLabels, datasets: [{ data: sCounts, backgroundColor: sLabels.map(l=>colorMap[l]||'#888780'), borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#898781' } }, y: { grid: { color: '#e1e0d9' }, ticks: { stepSize: 1, font: { size: 11 }, color: '#898781' } } } }
+  });
+
+  const mtg = meetings.slice(-6);
+  const mtgLabels = mtg.map(m => m.Date||'');
+  const mtgAtt = mtg.map(m => parseInt(m.Attendees)||0);
+  new Chart(document.getElementById('attendanceChart'), {
+    type: 'line',
+    data: { labels: mtgLabels, datasets: [{ data: mtgAtt, borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.08)', borderWidth: 2, pointBackgroundColor: '#2a78d6', pointRadius: 4, tension: 0.3, fill: true }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#898781' } }, y: { grid: { color: '#e1e0d9' }, ticks: { stepSize: 1, font: { size: 11 }, color: '#898781' } } } }
+  });
+}
+
+function calcKPIs(actions, workstreams, meetings) {
+  const open = actions.filter(r => !['Done','Ongoing'].includes(r.Status||'Open')).length;
+  const chartersDone = workstreams.filter(w => (w.Charter||'').toLowerCase().includes('done') || (w.Charter||'').toLowerCase().includes('complete')).length;
+  const totalWS = workstreams.length || 3;
+  const lastMtg = meetings[meetings.length-1];
+  const attendance = lastMtg ? parseInt(lastMtg.Attendees)||0 : 0;
+  const aging = actions.filter(r => {
+    const d = r['Meeting Date'];
+    if (!d) return false;
+    const parts = d.split('/');
+    if (parts.length < 2) return false;
+    const dt = new Date(2026, parseInt(parts[0])-1, parseInt(parts[1]));
+    return (Date.now() - dt.getTime()) > 14*24*60*60*1000 && !['Done','Ongoing'].includes(r.Status||'Open');
+  }).length;
+
+  return { open, chartersDone, totalWS, attendance, aging };
+}
+
+async function loadAll() {
+  const content = document.getElementById('dashContent');
+  content.innerHTML = '<div class="loading">Fetching data from Google Sheets...</div>';
+
+  try {
+    const [actions, workstreams, meetings, kpis] = await Promise.all([
+      fetchTab('ActionItems'),
+      fetchTab('Workstreams'),
+      fetchTab('Meetings'),
+      fetchTab('KPIs').catch(() => [])
+    ]);
+
+    const kpiData = calcKPIs(actions, workstreams, meetings);
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+    content.innerHTML = `
+      <div class="section-label">Overview</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Open action items</div><div class="value">${kpiData.open}</div><div class="sub ${kpiData.aging>0?'warn':'ok'}">${kpiData.aging>0?kpiData.aging+' aging 14+ days':'All recent'}</div></div>
+        <div class="kpi"><div class="label">Charters complete</div><div class="value">${kpiData.chartersDone} / ${kpiData.totalWS}</div><div class="sub ${kpiData.chartersDone===kpiData.totalWS?'ok':'warn'}">${kpiData.chartersDone===kpiData.totalWS?'All done':'In progress'}</div></div>
+        <div class="kpi"><div class="label">Last meeting attendance</div><div class="value">${kpiData.attendance}</div><div class="sub">${meetings.length} meetings total</div></div>
+        <div class="kpi"><div class="label">Total action items</div><div class="value">${actions.length}</div><div class="sub ok">${actions.filter(r=>(r.Status||'')=='Done').length} completed</div></div>
+      </div>
+
+      <div class="section-label">Workstream status</div>
+      <div class="ws-grid">${renderWorkstreams(workstreams)}</div>
+
+      <div class="section-label">Action items</div>
+      ${renderActions(actions)}
+
+      <div class="section-label">Analytics</div>
+      ${renderCharts(actions, meetings)}
+    `;
+
+    buildChartJS(actions, meetings);
+
+  } catch(err) {
+    const banner = document.getElementById('errorBanner');
+    banner.style.display = 'block';
+    banner.textContent = 'Could not load data. Make sure your sheet is published to the web and the Sheet ID is correct. Error: ' + err.message;
+    content.innerHTML = '';
+  }
+}
+
+window.addEventListener('load', loadAll);
+</script>
+</body>
+</html>
